@@ -1,0 +1,14 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: earlywarning
+      MYSQL_USER: earlywarning
+      MYSQL_PASSWORD: earlywarning
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+volumes:
+  mysql_data:

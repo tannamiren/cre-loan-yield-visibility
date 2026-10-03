@@ -1,0 +1,9 @@
+target/
+build/
+*.class
+.idea/
+*.iml
+inbox/*.csv
+processing/*.csv
+done/*.csv
+failed/*.csv

@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/earlywarning
+    username: earlywarning
+    password: earlywarning
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+server:
+  port: 8080
+app:
+  intake:
+    inbox-dir: inbox
+    processing-dir: processing
+    done-dir: done
+    failed-dir: failed
+  rules:
+    active-version: 1
+  generator:
+    seed: 42
+    output-dir: inbox
