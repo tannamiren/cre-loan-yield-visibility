@@ -7,6 +7,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        globally_quoted_identifiers: true
   flyway:
     enabled: true
     locations: classpath:db/migration
