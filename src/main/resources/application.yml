@@ -7,9 +7,6 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
-    properties:
-      hibernate:
-        globally_quoted_identifiers: true
   flyway:
     enabled: true
 server:
