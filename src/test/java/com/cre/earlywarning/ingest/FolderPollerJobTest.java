@@ -8,10 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.Trigger;
 import org.springframework.test.context.TestPropertySource;
 
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -135,8 +137,24 @@ class FolderPollerJobTest {
     @Autowired
     private FolderPollerJob pollerJob;
 
+    @Autowired
+    private DataSource dataSource;
+
     @Test
     void pollPicksUpAFileAndMovesItToDone() throws IOException, InterruptedException {
+        // All test contexts in this project share the same named in-memory H2 database
+        // (DB_CLOSE_DELAY=-1, Surefire reuses the JVM fork across test classes), including the
+        // shedlock table. Other @SpringBootTest classes run with the real scheduler active
+        // (@EnableScheduling is global) and can leave a stale "report-poller" lock row behind if
+        // their context is torn down before the lock's lockAtMostFor window naturally expires --
+        // ShedLock's expiry is based on the lock_until timestamp in the row, not on the original
+        // holder process being alive. If that happens, this test's manual pollerJob.poll() call
+        // would see the lock already held and the ShedLock AOP proxy would silently skip the
+        // method body, making the test flaky under the full suite despite passing in isolation.
+        // Clear any stale lock for this job before invoking it so the test starts from a
+        // guaranteed-unlocked state regardless of what earlier test classes left behind.
+        new JdbcTemplate(dataSource).update("DELETE FROM shedlock WHERE name = ?", "report-poller");
+
         loanRepository.save(new Loan("L850", "APARTMENT", new BigDecimal("5000000.00"),
             new BigDecimal("0.0550"), LocalDate.of(2030, 1, 1), new BigDecimal("400000.00")));
 
