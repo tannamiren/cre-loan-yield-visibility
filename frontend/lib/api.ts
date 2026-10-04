@@ -1,3 +1,5 @@
+import "server-only";
+
 export type AlertDto = {
   id: number;
   loanId: string;
