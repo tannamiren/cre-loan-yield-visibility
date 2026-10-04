@@ -7,3 +7,6 @@ inbox/*.csv
 processing/*.csv
 done/*.csv
 failed/*.csv
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
