@@ -1,0 +1,8 @@
+version: 998
+limits:
+  r1LatePaymentsThreshold: 2
+  r2LowDscrThreshold: 1.10
+  r3MaturitySoonMonths: 3
+  r4DscrFallDelta: 0.15
+  r4DscrFallMonths: 6
+  r5LowDebtYieldThreshold: 0.08
