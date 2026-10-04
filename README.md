@@ -54,6 +54,43 @@ pipeline is replayable.
 - Tests: one per rule, one per planted scenario end-to-end, plus Testcontainers-MySQL tests for the
   two-node ShedLock guarantee and double-ingest safety.
 
+## The 5 rules
+
+Each rule is a plain Java class reading its limits from `rules-v1.yaml`. R1-R3 mirror the standard
+CREFC watchlist; R4-R5 are this project's early-warning additions.
+
+| ID | Name | Fires when | Type | Why it exists |
+| --- | --- | --- | --- | --- |
+| R1 | Late payments | 2 or more payments are late in the current month | Credit | Standard watchlist signal |
+| R2 | Low DSCR | DSCR is below 1.10 | Credit | Standard watchlist signal |
+| R3 | Maturity soon | Maturity is within 3 months | Credit | Standard watchlist signal (spec's "90 days" approximated as 3 months, since data is monthly) |
+| R4 | DSCR falling | DSCR fell 0.15 or more over the trailing 6 months | Early warning | Catches a loan trending toward trouble before it crosses R2's fixed line |
+| R5 | Low debt yield near maturity | Debt yield is below 8% **and** maturity is within 18 months | Early warning | Debt yield separates loans that refinance from loans that fail; this is the gap the standard watchlist misses |
+
+R1-R3 fire on an absolute threshold crossed *this month*. R4-R5 look at trend/context (a 6-month
+delta, or debt yield combined with how soon the loan matures) — that's the actual "early warning"
+part of the product.
+
+## Reading the alert table
+
+Each alert shown in the queue or on a loan's detail page carries:
+
+- **Fired Month** — the most recent month (`YYYY-MM`) in which the rule fired. If the rule stops
+  firing for 2 consecutive months after that, the alert auto-resolves.
+- **Score** — the sum of three parts, shown as separate columns:
+  - **Type** — `40` if the firing rule is Credit (R1/R2/R3), `25` if it's Early Warning (R4/R5).
+    Credit rules score higher because they represent an already-crossed line, not just a trend.
+  - **Time** — scaled by months to maturity at the time of firing: `30` if ≤ 6 months, `20` if
+    ≤ 12 months, `10` if ≤ 18 months, `0` otherwise. A loan closer to maturity is more urgent.
+  - **Size** — `0` to `20`, scaled by the loan's original balance against the largest loan in the
+    portfolio. A bigger loan going bad matters more.
+  - The displayed **Score** is Type + Time + Size, and is what the queue is ranked by (highest
+    first).
+- **Rule Version** — which version of `rules-*.yaml` fired this alert, so a limit change later
+  doesn't retroactively change what an old alert says it was judged against.
+- **Limit** / **Inputs** — the exact threshold and the exact input values (e.g. the DSCR value, the
+  months-to-maturity) that were compared, for full auditability.
+
 ## Running it
 
 ```bash
@@ -64,6 +101,37 @@ mvn spring-boot:run                                        # starts the app; pol
 
 Then open `http://localhost:8080/` for the alert queue, or `http://localhost:8080/loans/L001/detail`
 for a loan's chart and alert history.
+
+## Adding more synthetic data
+
+All synthetic data comes from `LoanDataGenerator` (`src/main/java/com/cre/earlywarning/generator/`),
+run at startup by `GeneratorRunner` when the app is started with `-Dspring-boot.run.profiles=generator`.
+It seeds the `loan` table and writes one CSV per month into `inbox/` (`app.generator.output-dir` in
+`application.yml`), which the running app's own poller then ingests within ~10 seconds.
+
+- **Get a different "normal" dataset with the same mechanics** — change `app.generator.seed` in
+  `src/main/resources/application.yml` (default `42`), or pass `--reseed` to `run.sh`. The 3 planted
+  scenarios (`L001`/`L002`/`L003`) are scripted and don't change; only the 97 random-walk loans do.
+- **Add more loans** — raise `LOAN_COUNT` in `LoanDataGenerator.java` (currently `100`). New loans
+  get IDs `L004`+ through the random-walk path; no other change needed.
+- **Add more months** — raise `MONTH_COUNT` (currently `24`). The 3 scripted scenarios only define
+  behavior through month 23 (slow slide flattens at month 11, missed payments clears by month 9,
+  weak refinance is constant throughout) — extending `MONTH_COUNT` reuses their last-defined value
+  for any months beyond what each scenario method explicitly sets, so check `slowSlideScenario()` /
+  `weakRefinanceScenario()` / `missedPaymentsScenario()` if you want the extra months to do something
+  new rather than hold flat.
+- **Add a new planted scenario** — follow the pattern of `slowSlideScenario()`: write a method
+  returning `List<CsvRow>` for a fixed loan ID with a scripted (non-random) trajectory, register the
+  loan via `scriptedLoan(...)`, and add both to the two `loans.add(...)` / `rowsByLoan.put(...)` calls
+  near the top of `generate()`. Keep it deterministic (no `Random` calls) so it's reproducible
+  regardless of seed.
+- **Rerun without changing the generator** — after any code change, `./run.sh --reseed` wipes the
+  previous run's state (drop the `inbox`/`processing`/`done`/`failed` folders and the MySQL volume
+  first if you want a fully clean slate: `docker compose down -v`).
+- **Hand-craft a one-off CSV instead** — drop a file into `inbox/` matching the existing format
+  (header `loan_id,month,balance,noi,yearly_payments,payments_late`, one row per loan per month,
+  `month` as `YYYY-MM`) for a loan ID that already exists in the `loan` table; the poller will pick it
+  up on its next 10-second cycle like any generated file.
 
 ## What would change or build next
 
