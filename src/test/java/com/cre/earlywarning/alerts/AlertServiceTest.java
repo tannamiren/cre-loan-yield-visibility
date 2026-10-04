@@ -85,6 +85,22 @@ class AlertServiceTest {
     }
 
     @Test
+    void reFiringAnAcknowledgedAlertReopensItToOpen() {
+        loanRepository.save(loan("L706"));
+        apply("L706", YearMonth.of(2024, 1), fired("R2", RuleType.CREDIT, "1.10"));
+        Alert alert = alertRepository.findByLoanIdAndRuleId("L706", "R2").orElseThrow();
+        alertService.acknowledge(alert.getId());
+        assertThat(alertRepository.findById(alert.getId()).orElseThrow().getState())
+            .isEqualTo(AlertState.ACKNOWLEDGED);
+
+        apply("L706", YearMonth.of(2024, 2), fired("R2", RuleType.CREDIT, "1.10"));
+
+        Alert reopened = alertRepository.findByLoanIdAndRuleId("L706", "R2").orElseThrow();
+        assertThat(reopened.getState()).isEqualTo(AlertState.OPEN);
+        assertThat(reopened.getFiredMonth()).isEqualTo("2024-02");
+    }
+
+    @Test
     void openQueueOnlyReturnsOpenAlertsRankedByScoreDescending() {
         loanRepository.save(loan("L704"));
         loanRepository.save(loan("L705"));
