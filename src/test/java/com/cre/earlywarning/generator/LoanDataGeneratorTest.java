@@ -1,10 +1,21 @@
 package com.cre.earlywarning.generator;
 
+import com.cre.earlywarning.domain.Loan;
 import com.cre.earlywarning.ingest.CsvRow;
+import com.cre.earlywarning.metrics.LoanMetrics;
+import com.cre.earlywarning.rules.LoanMonthContext;
+import com.cre.earlywarning.rules.R1LatePaymentsRule;
+import com.cre.earlywarning.rules.R2LowDscrRule;
+import com.cre.earlywarning.rules.R3MaturitySoonRule;
+import com.cre.earlywarning.rules.R5LowDebtYieldNearMaturityRule;
+import com.cre.earlywarning.rules.RuleConfig;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -71,6 +82,52 @@ class LoanDataGeneratorTest {
         assertThat(l003Rows.get(5).paymentsLate()).isGreaterThanOrEqualTo(2);
         assertThat(l003Rows.get(6).paymentsLate()).isGreaterThanOrEqualTo(2);
         assertThat(l003Rows.get(9).paymentsLate()).isEqualTo(0);
+    }
+
+    @Test
+    void ninetySevenRandomLoansNeverFireR1R2R3R5AcrossAllTwentyFourMonths() {
+        // Matches src/main/resources/rules/rules-v1.yaml, the active production rule config.
+        RuleConfig config = new RuleConfig(1, 2, new BigDecimal("1.10"), 3,
+            new BigDecimal("0.15"), 6, new BigDecimal("0.08"), 18);
+        R1LatePaymentsRule r1 = new R1LatePaymentsRule(config);
+        R2LowDscrRule r2 = new R2LowDscrRule(config);
+        R3MaturitySoonRule r3 = new R3MaturitySoonRule(config);
+        R5LowDebtYieldNearMaturityRule r5 = new R5LowDebtYieldNearMaturityRule(config);
+
+        GeneratedData data = generator.generate(42L);
+
+        for (GeneratedLoan generatedLoan : data.loans()) {
+            if (List.of("L001", "L002", "L003").contains(generatedLoan.loanId())) {
+                continue; // scripted scenarios are designed to fire rules; only the 97 random loans must stay quiet
+            }
+
+            Loan loan = new Loan(generatedLoan.loanId(), generatedLoan.propertyType(),
+                generatedLoan.originalBalance(), generatedLoan.rate(), generatedLoan.maturityDate(),
+                generatedLoan.underwritingNoi());
+
+            List<CsvRow> rows = rowsForLoan(data, generatedLoan.loanId());
+            List<LoanMetrics> history = new ArrayList<>();
+            for (CsvRow row : rows) {
+                BigDecimal dscr = row.noi().divide(row.yearlyPayments(), 4, RoundingMode.HALF_UP);
+                BigDecimal debtYield = row.noi().divide(row.balance(), 4, RoundingMode.HALF_UP);
+                long monthsToMaturity = ChronoUnit.MONTHS.between(
+                    row.month().atDay(1), loan.getMaturityDate().withDayOfMonth(1));
+                LoanMetrics current = new LoanMetrics(row.month(), row.balance(), row.noi(),
+                    row.yearlyPayments(), row.paymentsLate(), dscr, debtYield, monthsToMaturity);
+                history.add(current);
+
+                LoanMonthContext context = new LoanMonthContext(loan, current, history);
+
+                assertThat(r1.evaluate(context).fired())
+                    .as("R1 fired for %s at %s", generatedLoan.loanId(), row.month()).isFalse();
+                assertThat(r2.evaluate(context).fired())
+                    .as("R2 fired for %s at %s", generatedLoan.loanId(), row.month()).isFalse();
+                assertThat(r3.evaluate(context).fired())
+                    .as("R3 fired for %s at %s", generatedLoan.loanId(), row.month()).isFalse();
+                assertThat(r5.evaluate(context).fired())
+                    .as("R5 fired for %s at %s", generatedLoan.loanId(), row.month()).isFalse();
+            }
+        }
     }
 
     private List<CsvRow> rowsForLoan(GeneratedData data, String loanId) {

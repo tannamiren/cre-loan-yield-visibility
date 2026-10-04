@@ -37,7 +37,7 @@ public class LoanDataGenerator {
             String propertyType = propertyTypeFor(i);
             BigDecimal originalBalance = randomBalance(random);
             BigDecimal rate = randomRate(random);
-            int maturityMonthsOut = 24 + random.nextInt(37); // 24..60 months out, stays quiet for R3/R5
+            int maturityMonthsOut = 28 + random.nextInt(33); // 28..60 months out, stays quiet for R3/R5 within the 24-month generated window
             LocalDate maturityDate = FIRST_MONTH.plusMonths(maturityMonthsOut).atDay(1);
             BigDecimal yearlyPayments = amortizedAnnualPayment(originalBalance, rate);
             BigDecimal underwritingNoi = yearlyPayments.multiply(new BigDecimal("1.35"));
