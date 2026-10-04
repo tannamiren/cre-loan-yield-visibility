@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Loan Detail</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<h1 th:text="'Loan ' + ${loan.loanId}"></h1>
+<p th:text="'Property type: ' + ${loan.propertyType}"></p>
+<p th:text="'Original balance: ' + ${loan.originalBalance}"></p>
+<p th:text="'Maturity: ' + ${loan.maturityDate}"></p>
+
+<canvas id="metricsChart" width="800" height="400"></canvas>
+<script th:inline="javascript">
+    const chartData = JSON.parse(/*[[${chartDataJson}]]*/ '{}');
+    new Chart(document.getElementById('metricsChart'), {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                { label: 'DSCR', data: chartData.dscr, borderColor: 'blue', fill: false },
+                { label: 'Debt Yield', data: chartData.debtYield, borderColor: 'red', fill: false }
+            ]
+        }
+    });
+</script>
+
+<h2>Alerts</h2>
+<table border="1" cellpadding="6">
+    <thead>
+        <tr><th>Rule</th><th>State</th><th>Score</th><th>Fired Month</th><th>Limit</th><th>Inputs</th></tr>
+    </thead>
+    <tbody>
+        <tr th:each="alert : ${loan.alerts}">
+            <td th:text="${alert.ruleId}"></td>
+            <td th:text="${alert.state}"></td>
+            <td th:text="${alert.score}"></td>
+            <td th:text="${alert.firedMonth}"></td>
+            <td th:text="${alert.limitValue}"></td>
+            <td th:text="${alert.inputs}"></td>
+        </tr>
+    </tbody>
+</table>
+</body>
+</html>

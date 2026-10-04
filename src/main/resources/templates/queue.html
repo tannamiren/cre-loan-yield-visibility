@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Loan Early-Warning Queue</title>
+</head>
+<body>
+<h1>Open Alerts</h1>
+<table border="1" cellpadding="6">
+    <thead>
+        <tr><th>Loan</th><th>Rule</th><th>Score</th><th>Fired Month</th><th></th></tr>
+    </thead>
+    <tbody>
+        <tr th:each="alert : ${alerts}">
+            <td><a th:href="@{'/loans/' + ${alert.loanId} + '/detail'}" th:text="${alert.loanId}"></a></td>
+            <td th:text="${alert.ruleId}"></td>
+            <td th:text="${alert.score}"></td>
+            <td th:text="${alert.firedMonth}"></td>
+            <td>
+                <form th:action="@{'/ui/alerts/' + ${alert.id} + '/acknowledge'}" method="post">
+                    <button type="submit">Acknowledge</button>
+                </form>
+            </td>
+        </tr>
+    </tbody>
+</table>
+</body>
+</html>
