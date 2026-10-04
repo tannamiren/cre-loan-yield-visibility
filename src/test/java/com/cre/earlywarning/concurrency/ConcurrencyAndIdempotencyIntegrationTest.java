@@ -22,7 +22,9 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.LinkedHashSet;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -41,10 +43,21 @@ class ConcurrencyAndIdempotencyIntegrationTest {
     private ConfigurableApplicationContext nodeA;
     private ConfigurableApplicationContext nodeB;
 
+    // Keys that startNode() pushes into System properties (see startNode() for why). Tracked here,
+    // alongside the set/clear calls, so the cleanup list can never drift from what was actually set.
+    private final Set<String> systemPropertyKeysSet = new LinkedHashSet<>();
+
     @AfterEach
     void tearDown() {
         if (nodeA != null) nodeA.close();
         if (nodeB != null) nodeB.close();
+        // Reused forks (Surefire default reuseForks=true) mean these System properties would
+        // otherwise leak into every other test class run in the same `mvn test` JVM, pointing them
+        // at a torn-down Testcontainers MySQL URL and deleted @TempDir directories.
+        for (String key : systemPropertyKeysSet) {
+            System.clearProperty(key);
+        }
+        systemPropertyKeysSet.clear();
     }
 
     @Test
@@ -146,6 +159,7 @@ class ConcurrencyAndIdempotencyIntegrationTest {
 
         for (String key : props.stringPropertyNames()) {
             System.setProperty(key, props.getProperty(key));
+            systemPropertyKeysSet.add(key);
         }
 
         return new SpringApplicationBuilder(EarlyWarningApplication.class).properties(props).run();
