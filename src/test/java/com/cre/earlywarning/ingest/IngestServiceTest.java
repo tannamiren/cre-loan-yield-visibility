@@ -7,6 +7,7 @@ import com.cre.earlywarning.domain.LoanRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
@@ -60,5 +62,28 @@ class IngestServiceTest {
 
         assertThat(secondInsert).isFalse();
         assertThat(alertCountAfterSecond).isEqualTo(alertCountAfterFirst);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void ingestRollsBackTheEventWhenRuleEvaluationFailsForAnUnknownLoan() {
+        // This test deliberately suspends the class-level @Transactional wrapper (which would
+        // otherwise nest everything in one outer transaction that only rolls back at the very end
+        // of the test, masking the behavior under test). With no outer transaction active here,
+        // IngestService.ingest()'s own @Transactional boundary owns a real transaction against the
+        // DB: when RuleEngine.evaluate throws IllegalStateException("Unknown loan ...") because
+        // loan "L802" was never saved, Spring must physically roll back the event insert performed
+        // moments earlier by EventLog.append. Without @Transactional on ingest(), that insert would
+        // already be durably committed by the time the exception is thrown, permanently stranding
+        // this loan-month (future retries would see EventLog.append return false and silently skip
+        // it forever).
+        CsvRow row = new CsvRow("L802", YearMonth.of(2024, 1), new BigDecimal("5000000.00"),
+            new BigDecimal("400000.00"), new BigDecimal("600000.00"), 2);
+
+        assertThatThrownBy(() -> ingestService.ingest(row))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Unknown loan");
+
+        assertThat(eventRepository.findByLoanIdOrderByMonthAsc("L802")).isEmpty();
     }
 }
