@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 @Component
@@ -52,6 +53,10 @@ public class FolderPollerJob {
         if (files == null) {
             return;
         }
+        // CSV filenames are report-YYYY-MM.csv; sort lexicographically so files are processed in
+        // chronological order. listFiles() has no ordering guarantee, and processing months out of
+        // order corrupts alert state (see AlertService.applyRuleEvaluations' monotonicity guard).
+        Arrays.sort(files, Comparator.comparing(File::getName));
         for (File file : files) {
             if (System.currentTimeMillis() - file.lastModified() < RECENTLY_MODIFIED_WINDOW_MS) {
                 continue;

@@ -39,6 +39,13 @@ public class AlertService {
         for (RuleEvaluation evaluation : evaluations) {
             Optional<Alert> existing = alertRepository.findByLoanIdAndRuleId(loanId, evaluation.ruleId());
 
+            if (existing.isPresent() && YearMonth.parse(existing.get().getFiredMonth()).isAfter(month)) {
+                // Stale/out-of-order evaluation for a month earlier than what's already recorded
+                // as this alert's most-recently-applied month; do not let it regress state that a
+                // chronologically later month already correctly set (fired or clear-month-count).
+                continue;
+            }
+
             if (evaluation.fired()) {
                 Alert alert = existing.orElseGet(() -> new Alert(loanId, evaluation.ruleId()));
                 alert.setState(AlertState.OPEN);

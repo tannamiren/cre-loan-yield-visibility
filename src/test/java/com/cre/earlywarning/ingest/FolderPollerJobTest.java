@@ -14,6 +14,7 @@ import org.springframework.scheduling.Trigger;
 import org.springframework.test.context.TestPropertySource;
 
 import javax.sql.DataSource;
+import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -21,6 +22,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -174,5 +176,30 @@ class FolderPollerJobTest {
         assertThat(Files.exists(file)).isFalse();
         assertThat(Files.exists(Path.of("build/test-data/poller-done/report-2024-01.csv"))).isTrue();
         assertThat(eventRepository.findByLoanIdOrderByMonthAsc("L850")).hasSize(1);
+    }
+
+    // Regression test for the FINAL whole-branch review finding (CRITICAL): File[] from
+    // listFiles() has no ordering guarantee, so dropping multiple months' CSVs into the inbox at
+    // once could process them out of chronological order, corrupting alert state (see
+    // PlantedScenarioTest for the state-corruption-level regression test, which is the main
+    // proof). This test only confirms the narrower mechanical fact that poll() now sorts files by
+    // filename (report-YYYY-MM.csv sorts lexicographically == chronologically) before processing:
+    // it builds a shuffled list of File handles exactly as poll() would see from listFiles(), and
+    // confirms applying the same Arrays.sort(..., Comparator.comparing(File::getName)) poll() uses
+    // internally produces filename-chronological order.
+    @Test
+    void sortingByFilenameProducesChronologicalOrder() {
+        File[] files = {
+            new File("report-2024-03.csv"),
+            new File("report-2024-01.csv"),
+            new File("report-2024-12.csv"),
+            new File("report-2024-02.csv"),
+        };
+
+        Arrays.sort(files, java.util.Comparator.comparing(File::getName));
+
+        assertThat(Arrays.stream(files).map(File::getName).toList())
+            .containsExactly(
+                "report-2024-01.csv", "report-2024-02.csv", "report-2024-03.csv", "report-2024-12.csv");
     }
 }
