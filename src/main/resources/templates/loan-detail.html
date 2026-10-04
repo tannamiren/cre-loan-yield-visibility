@@ -29,13 +29,20 @@
 <h2>Alerts</h2>
 <table border="1" cellpadding="6">
     <thead>
-        <tr><th>Rule</th><th>State</th><th>Score</th><th>Fired Month</th><th>Limit</th><th>Inputs</th></tr>
+        <tr>
+            <th>Rule</th><th>Rule Version</th><th>State</th><th>Score</th><th>Type</th><th>Time</th><th>Size</th>
+            <th>Fired Month</th><th>Limit</th><th>Inputs</th>
+        </tr>
     </thead>
     <tbody>
         <tr th:each="alert : ${loan.alerts}">
             <td th:text="${alert.ruleId}"></td>
+            <td th:text="${alert.ruleVersion}"></td>
             <td th:text="${alert.state}"></td>
             <td th:text="${alert.score}"></td>
+            <td th:text="${alert.scoreType}"></td>
+            <td th:text="${alert.scoreTime}"></td>
+            <td th:text="${alert.scoreSize}"></td>
             <td th:text="${alert.firedMonth}"></td>
             <td th:text="${alert.limitValue}"></td>
             <td th:text="${alert.inputs}"></td>

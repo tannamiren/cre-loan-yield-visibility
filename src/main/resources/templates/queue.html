@@ -8,13 +8,16 @@
 <h1>Open Alerts</h1>
 <table border="1" cellpadding="6">
     <thead>
-        <tr><th>Loan</th><th>Rule</th><th>Score</th><th>Fired Month</th><th></th></tr>
+        <tr><th>Loan</th><th>Rule</th><th>Score</th><th>Type</th><th>Time</th><th>Size</th><th>Fired Month</th><th></th></tr>
     </thead>
     <tbody>
         <tr th:each="alert : ${alerts}">
             <td><a th:href="@{'/loans/' + ${alert.loanId} + '/detail'}" th:text="${alert.loanId}"></a></td>
             <td th:text="${alert.ruleId}"></td>
             <td th:text="${alert.score}"></td>
+            <td th:text="${alert.scoreType}"></td>
+            <td th:text="${alert.scoreTime}"></td>
+            <td th:text="${alert.scoreSize}"></td>
             <td th:text="${alert.firedMonth}"></td>
             <td>
                 <form th:action="@{'/ui/alerts/' + ${alert.id} + '/acknowledge'}" method="post">
