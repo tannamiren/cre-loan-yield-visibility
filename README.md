@@ -102,6 +102,26 @@ mvn spring-boot:run                                        # starts the app; pol
 Then open `http://localhost:8080/` for the alert queue, or `http://localhost:8080/loans/L001/detail`
 for a loan's chart and alert history.
 
+## Frontend (Next.js)
+
+An alternative UI to the Thymeleaf screens, built in Next.js (App Router, TypeScript, Tailwind) at
+`/frontend`. It reads and writes through the same REST API as Thymeleaf — no separate backend, no
+CORS, no new API contract. Server Components fetch from the Spring Boot app server-side; the
+Acknowledge button is a Server Action.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open `http://localhost:3000/` for the alert queue, or `http://localhost:3000/loans/L001` for a
+loan's chart and alert history. The Spring Boot app (`./run.sh` from the repo root) must be running
+first — this frontend has no data of its own.
+
+Configure the API base URL via `frontend/.env.local` (copy `.env.local.example`); defaults to
+`http://localhost:8080`.
+
 ## Adding more synthetic data
 
 All synthetic data comes from `LoanDataGenerator` (`src/main/java/com/cre/earlywarning/generator/`),
