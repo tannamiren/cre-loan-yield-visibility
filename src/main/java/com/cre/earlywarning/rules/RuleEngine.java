@@ -40,6 +40,11 @@ public class RuleEngine {
             .sorted(Comparator.comparing(LoanMetrics::month))
             .toList();
 
+        if (history.isEmpty()) {
+            throw new IllegalStateException(
+                "No event found for loan " + loanId + " at or before " + month);
+        }
+
         LoanMetrics current = history.get(history.size() - 1);
         LoanMonthContext context = new LoanMonthContext(loan, current, history);
 
