@@ -51,7 +51,7 @@ export async function getLoan(id: string): Promise<LoanDetailDto | null> {
 }
 
 export async function acknowledgeAlert(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${id}/acknowledge`, { method: "POST" });
+  const res = await fetch(`${API_BASE_URL}/alerts/${id}/acknowledge`, { method: "POST", cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Failed to acknowledge alert ${id}: ${res.status}`);
   }
