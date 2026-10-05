@@ -15,6 +15,11 @@ public class LoanController {
         this.loanQueryService = loanQueryService;
     }
 
+    @GetMapping
+    public java.util.List<LoanSummaryDto> list() {
+        return loanQueryService.getAllLoanSummaries();
+    }
+
     @GetMapping("/{id}")
     public LoanDetailDto detail(@PathVariable String id) {
         return loanQueryService.getLoanDetail(id);
