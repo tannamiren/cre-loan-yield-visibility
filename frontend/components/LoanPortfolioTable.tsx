@@ -35,8 +35,10 @@ export function LoanPortfolioTable({ loans }: { loans: LoanSummaryDto[] }) {
             </td>
             <td className="p-2">{(loan.rate * 100).toFixed(2)}%</td>
             <td className="p-2">{loan.maturityDate}</td>
-            <td className="p-2">{loan.latestDscr ?? "—"}</td>
-            <td className="p-2">{loan.latestDebtYield ?? "—"}</td>
+            <td className="p-2">{loan.latestDscr !== null ? `${loan.latestDscr.toFixed(2)}x` : "—"}</td>
+            <td className="p-2">
+              {loan.latestDebtYield !== null ? `${(loan.latestDebtYield * 100).toFixed(2)}%` : "—"}
+            </td>
             <td className="p-2">
               <Sparkline data={loan.history.map((h) => h.dscr)} />
             </td>
