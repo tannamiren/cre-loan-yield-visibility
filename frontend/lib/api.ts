@@ -31,6 +31,17 @@ export type LoanDetailDto = {
   alerts: AlertDto[];
 };
 
+export type LoanSummaryDto = {
+  loanId: string;
+  propertyType: string;
+  originalBalance: number;
+  rate: number;
+  maturityDate: string;
+  latestDscr: number | null;
+  latestDebtYield: number | null;
+  history: LoanHistoryPointDto[];
+};
+
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:8080";
 
 export async function getAlerts(): Promise<AlertDto[]> {
@@ -57,4 +68,12 @@ export async function acknowledgeAlert(id: number): Promise<void> {
   if (!res.ok) {
     throw new Error(`Failed to acknowledge alert ${id}: ${res.status}`);
   }
+}
+
+export async function getLoans(): Promise<LoanSummaryDto[]> {
+  const res = await fetch(`${API_BASE_URL}/loans`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch loans: ${res.status}`);
+  }
+  return res.json();
 }
