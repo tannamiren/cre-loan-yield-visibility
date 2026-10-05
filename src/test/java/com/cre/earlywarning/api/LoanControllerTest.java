@@ -4,19 +4,22 @@ import com.cre.earlywarning.domain.Loan;
 import com.cre.earlywarning.domain.LoanRepository;
 import com.cre.earlywarning.ingest.CsvRow;
 import com.cre.earlywarning.ingest.IngestService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.ArrayList;
+import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,7 +28,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class LoanControllerTest {
 
     @Autowired
@@ -36,11 +38,6 @@ class LoanControllerTest {
 
     @Autowired
     private IngestService ingestService;
-
-    @BeforeEach
-    void setUp() {
-        loanRepository.deleteAll();
-    }
 
     @Test
     void getLoanReturnsHistoryAndAlerts() throws Exception {
@@ -71,12 +68,29 @@ class LoanControllerTest {
         ingestService.ingest(new CsvRow("L700", YearMonth.of(2024, 2), new BigDecimal("8000000.00"),
             new BigDecimal("600000.00"), new BigDecimal("500000.00"), 0));
 
-        mockMvc.perform(get("/loans"))
+        // Scope assertions to this test's own loan ID rather than the raw list length: other
+        // non-transactional test classes in this suite (e.g. FolderPollerJobTest) commit Loan
+        // rows directly to the shared H2 database that persist across test classes, so the full
+        // /loans list can legitimately contain more than just L700 depending on run order.
+        // Parsed in Java rather than via a raw-length jsonPath, since a single-match jsonPath
+        // filter result gets unwrapped by Jayway JsonPath and ".length()" then returns the
+        // matched object's field count instead of a match count.
+        String body = mockMvc.perform(get("/loans"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()", is(1)))
-            .andExpect(jsonPath("$[0].loanId", is("L700")))
-            .andExpect(jsonPath("$[0].history.length()", is(2)))
-            .andExpect(jsonPath("$[0].latestDscr").exists())
-            .andExpect(jsonPath("$[0].latestDebtYield").exists());
+            .andReturn().getResponse().getContentAsString();
+
+        JsonNode all = new ObjectMapper().readTree(body);
+        List<JsonNode> matches = new ArrayList<>();
+        all.forEach(node -> {
+            if ("L700".equals(node.path("loanId").asText())) {
+                matches.add(node);
+            }
+        });
+
+        assertThat(matches).hasSize(1);
+        JsonNode loan700 = matches.get(0);
+        assertThat(loan700.path("history")).hasSize(2);
+        assertThat(loan700.hasNonNull("latestDscr")).isTrue();
+        assertThat(loan700.hasNonNull("latestDebtYield")).isTrue();
     }
 }
