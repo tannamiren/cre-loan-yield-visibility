@@ -1,21 +1,19 @@
 # Loan Surveillance Early-Warning Engine
 
 A small Spring Boot service that flags commercial real estate loans trending toward trouble before
-they cross the fixed thresholds on a standard monthly watchlist. No LLM, no ML — every alert traces
-to a rule ID, a rule version, and the exact input values that fired it.
+they cross the fixed thresholds on a standard monthly watchlist. 
 
 ## The problem and who it serves
 
 Servicers watch loans against fixed limits once a month; a loan can slide for months before any
 alarm rings. $76.6B of CMBS loans reach maturity in 2026, and about 36% of them carry a debt yield
 below 8% — the zone where refinancing often fails. The primary user is a servicer analyst who needs
-a short, ranked, explainable list each month. See `cre-problem-research.md` for the full research.
+a short, ranked, explainable list each month.
 
 ## What was learned
 
 Debt yield separates loans that refinance from loans that fail (13-14% vs. about 9%). The standard
 watchlist checks absolute levels, not direction of change — that gap is what rules R4 and R5 target.
-Full writeup in `cre-problem-research.md`.
 
 ## How scope was decided
 
@@ -161,3 +159,4 @@ It seeds the `loan` table and writes one CSV per month into `inbox/` (`app.gener
 4. Add Kafka as a second intake path calling the same `IngestService.ingest(row)`; later, move the
    event log itself onto a Kafka topic.
 5. Add escalation for alerts that go unacknowledged.
+6. Add observability metrics, particularly prometheus and logging. 

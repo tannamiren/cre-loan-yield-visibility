@@ -2,13 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current state
-
-This repository is **pre-implementation**. It contains only planning/research documents for a take-home
-project — no code, build files, or git history exist yet. Before writing code, read `goal.md` first, then
-`option-a-research.md` (the build spec). `cre-problem-research.md` has the decision rationale and interview
-talking points. 
-
 ## What is being built
 
 A **Loan Surveillance Early-Warning Engine** for commercial real estate (CRE) loans: a tool that flags

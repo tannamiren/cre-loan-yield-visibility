@@ -41,8 +41,7 @@ public class RuleEngine {
             .toList();
 
         if (history.isEmpty()) {
-            throw new IllegalStateException(
-                "No event found for loan " + loanId + " at or before " + month);
+            throw new IllegalStateException("No events on or before " + month + " for loan " + loanId);
         }
 
         LoanMetrics current = history.get(history.size() - 1);

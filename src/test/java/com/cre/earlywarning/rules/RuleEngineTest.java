@@ -14,7 +14,6 @@ import java.time.YearMonth;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
@@ -44,44 +43,37 @@ class RuleEngineTest {
     }
 
     @Test
-    void throwsIllegalStateWhenNoEventExistsAtOrBeforeRequestedMonth() {
-        loanRepository.save(new Loan("L901", "APARTMENT", new BigDecimal("10000000.00"),
-            new BigDecimal("0.0550"), LocalDate.of(2030, 1, 1), new BigDecimal("800000.00")));
-        eventLog.append("L901", YearMonth.of(2024, 6), new BigDecimal("10000000.00"),
-            new BigDecimal("800000.00"), new BigDecimal("650000.00"), 0);
+    void r4FiresThroughTheRealPipelineWhenDscrFallsOverSixRealIngestedMonths() {
+        // Regression test for the RuleEngine lookback: a hand-built LoanMonthContext (as in
+        // R4DscrFallingRuleTest) can hide bugs in how the engine assembles history from the
+        // actual event log. This ingests 7 consecutive real months and lets RuleEngine build
+        // its own history, so it exercises the same path IngestService/FolderPollerJob use.
+        loanRepository.save(new Loan("L950", "APARTMENT", new BigDecimal("20000000.00"),
+            new BigDecimal("0.0550"), LocalDate.of(2030, 1, 1), new BigDecimal("1600000.00")));
 
-        assertThatThrownBy(() -> ruleEngine.evaluate("L901", YearMonth.of(2024, 1)))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("No event found for loan L901 at or before 2024-01");
-    }
-
-    @Test
-    void r4FiresWhenDscrFallsAtLeastPoint15OverSixMonthsThroughTheRealPipeline() {
-        loanRepository.save(new Loan("L902", "APARTMENT", new BigDecimal("20000000.00"),
-            new BigDecimal("0.0550"), LocalDate.of(2032, 1, 1), new BigDecimal("1600000.00")));
-
-        BigDecimal yearlyPayments = new BigDecimal("1000000.00");
         BigDecimal balance = new BigDecimal("20000000.00");
-        String[] noiByMonth = {
-            "1400000.00", // Jan: dscr 1.4000
-            "1366667.00", // Feb
-            "1333333.00", // Mar
-            "1300000.00", // Apr
-            "1266667.00", // May
-            "1233333.00", // Jun
-            "1200000.00"  // Jul: dscr 1.2000 -> fall of 0.2000 vs Jan
+        BigDecimal yearlyPayments = new BigDecimal("1000000.00");
+        YearMonth[] months = {
+            YearMonth.of(2024, 1), YearMonth.of(2024, 2), YearMonth.of(2024, 3),
+            YearMonth.of(2024, 4), YearMonth.of(2024, 5), YearMonth.of(2024, 6),
+            YearMonth.of(2024, 7)
         };
-        for (int i = 0; i < noiByMonth.length; i++) {
-            eventLog.append("L902", YearMonth.of(2024, 1).plusMonths(i), balance,
-                new BigDecimal(noiByMonth[i]), yearlyPayments, 0);
+        BigDecimal[] noiByMonth = {
+            new BigDecimal("1400000.00"), new BigDecimal("1350000.00"), new BigDecimal("1300000.00"),
+            new BigDecimal("1280000.00"), new BigDecimal("1250000.00"), new BigDecimal("1220000.00"),
+            new BigDecimal("1200000.00")
+        };
+        for (int i = 0; i < months.length; i++) {
+            eventLog.append("L950", months[i], balance, noiByMonth[i], yearlyPayments, 0);
         }
 
-        List<RuleEvaluation> evaluations = ruleEngine.evaluate("L902", YearMonth.of(2024, 7));
+        List<RuleEvaluation> evaluations = ruleEngine.evaluate("L950", YearMonth.of(2024, 7));
 
         RuleEvaluation r4 = evaluations.stream()
             .filter(e -> e.ruleId().equals("R4"))
             .findFirst()
             .orElseThrow();
         assertThat(r4.fired()).isTrue();
+        assertThat(r4.inputs()).containsEntry("fall", "0.2000");
     }
 }

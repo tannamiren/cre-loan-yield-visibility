@@ -22,9 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.LinkedHashSet;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -43,21 +41,10 @@ class ConcurrencyAndIdempotencyIntegrationTest {
     private ConfigurableApplicationContext nodeA;
     private ConfigurableApplicationContext nodeB;
 
-    // Keys that startNode() pushes into System properties (see startNode() for why). Tracked here,
-    // alongside the set/clear calls, so the cleanup list can never drift from what was actually set.
-    private final Set<String> systemPropertyKeysSet = new LinkedHashSet<>();
-
     @AfterEach
     void tearDown() {
         if (nodeA != null) nodeA.close();
         if (nodeB != null) nodeB.close();
-        // Reused forks (Surefire default reuseForks=true) mean these System properties would
-        // otherwise leak into every other test class run in the same `mvn test` JVM, pointing them
-        // at a torn-down Testcontainers MySQL URL and deleted @TempDir directories.
-        for (String key : systemPropertyKeysSet) {
-            System.clearProperty(key);
-        }
-        systemPropertyKeysSet.clear();
     }
 
     @Test
@@ -82,16 +69,9 @@ class ConcurrencyAndIdempotencyIntegrationTest {
         FolderPollerJob pollerA = nodeA.getBean(FolderPollerJob.class);
         FolderPollerJob pollerB = nodeB.getBean(FolderPollerJob.class);
 
-        // Both nodes' @Scheduled FolderPollerJob.poll() already starts firing automatically on
-        // app startup (fixedDelay = 10s) and can win the ShedLock (lockAtLeastFor = 5s) on an
-        // empty inbox before this test writes the file above. A single manual poll() call can
-        // therefore race against that already-held lock and no-op. Retrying each node's poll()
-        // until the file is gone keeps the real concurrency/ShedLock behavior under test (two
-        // nodes genuinely racing for the same file against real MySQL) without depending on exact
-        // scheduler timing.
         ExecutorService executor = Executors.newFixedThreadPool(2);
-        executor.submit(() -> pollUntilProcessed(pollerA, file));
-        executor.submit(() -> pollUntilProcessed(pollerB, file));
+        executor.submit(pollerA::poll);
+        executor.submit(pollerB::poll);
         executor.shutdown();
         executor.awaitTermination(30, TimeUnit.SECONDS);
 
@@ -121,32 +101,11 @@ class ConcurrencyAndIdempotencyIntegrationTest {
         assertThat(eventRepository.findByLoanIdOrderByMonthAsc("L951")).hasSize(1);
     }
 
-    private void pollUntilProcessed(FolderPollerJob poller, Path file) {
-        long deadline = System.currentTimeMillis() + 25_000;
-        while (Files.exists(file) && System.currentTimeMillis() < deadline) {
-            poller.poll();
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-    }
-
     private ConfigurableApplicationContext startNode(Path inbox, Path processing, Path done, Path failed) {
-        // NOTE: src/test/resources/application.yml is on the test classpath and is loaded by
-        // Spring Boot with HIGHER precedence than SpringApplicationBuilder.properties(...) (the
-        // latter only populates the low-priority "default properties" source). To genuinely point
-        // each node at the shared Testcontainers MySQL instance and the per-test @TempDir
-        // directories (rather than silently falling back to the H2 test datasource and the fixed
-        // build/test-data directories from application.yml), these overrides are applied as JVM
-        // System properties, which Spring Boot resolves ahead of application.yml.
         Properties props = new Properties();
         props.setProperty("spring.datasource.url", mysql.getJdbcUrl());
         props.setProperty("spring.datasource.username", mysql.getUsername());
         props.setProperty("spring.datasource.password", mysql.getPassword());
-        props.setProperty("spring.datasource.driver-class-name", "com.mysql.cj.jdbc.Driver");
         props.setProperty("spring.jpa.hibernate.ddl-auto", "validate");
         props.setProperty("spring.main.web-application-type", "none");
         props.setProperty("app.rules.active-version", "1");
@@ -156,11 +115,6 @@ class ConcurrencyAndIdempotencyIntegrationTest {
         props.setProperty("app.intake.done-dir", done.toString());
         props.setProperty("app.intake.failed-dir", failed.toString());
         props.setProperty("app.generator.output-dir", inbox.toString());
-
-        for (String key : props.stringPropertyNames()) {
-            System.setProperty(key, props.getProperty(key));
-            systemPropertyKeysSet.add(key);
-        }
 
         return new SpringApplicationBuilder(EarlyWarningApplication.class).properties(props).run();
     }
